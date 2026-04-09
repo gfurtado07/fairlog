@@ -3,9 +3,17 @@ import { CreditCard, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import clsx from 'clsx';
 
+/**
+ * BusinessCardScanner
+ * Opens the camera to photograph a business card, sends it to
+ * the scan-business-card Edge Function, and returns extracted fields.
+ *
+ * Props:
+ *   onExtracted(data) — called with { name, company, phone, email, website, wechat, address, title, notes }
+ */
 const BusinessCardScanner = ({ onExtracted }) => {
   const fileInputRef = useRef(null);
-  const [status, setStatus] = useState('idle');
+  const [status, setStatus] = useState('idle'); // idle | scanning | success | error
   const [errorMsg, setErrorMsg] = useState('');
 
   const compressImage = (file, maxWidthPx = 1200) => {
@@ -29,6 +37,7 @@ const BusinessCardScanner = ({ onExtracted }) => {
     new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => {
+        // reader.result is "data:image/jpeg;base64,XXXX" — strip the prefix
         const base64 = reader.result.split(',')[1];
         resolve(base64);
       };
@@ -45,6 +54,7 @@ const BusinessCardScanner = ({ onExtracted }) => {
     setErrorMsg('');
 
     try {
+      // Compress before sending to keep payload small
       const compressed = await compressImage(file);
       const imageBase64 = await toBase64(compressed);
 
@@ -58,6 +68,7 @@ const BusinessCardScanner = ({ onExtracted }) => {
       setStatus('success');
       onExtracted?.(data?.data || {});
 
+      // Reset back to idle after 2 s
       setTimeout(() => setStatus('idle'), 2000);
     } catch (err) {
       console.error('BusinessCardScanner error:', err);

@@ -35,7 +35,7 @@ export default function ProductFormPage() {
   const { eventId, supplierId, productId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const saveWithSync = useSaveWithSync('products');
+  const { save: saveProduct } = useSaveWithSync('products');
 
   // Form state
   const [photos, setPhotos] = useState([]);
@@ -100,9 +100,15 @@ export default function ProductFormPage() {
               weight: productData.weight || '',
             });
 
-            // Load photos
+            // Load photos — restore with annotations if available
             if (productData.photos && Array.isArray(productData.photos)) {
-              setPhotos(productData.photos);
+              const annotations = productData.photo_annotations || [];
+              setPhotos(
+                productData.photos.map((url, i) => ({
+                  url,
+                  annotation: annotations[i] || '',
+                }))
+              );
             }
           }
         }
@@ -168,19 +174,28 @@ export default function ProductFormPage() {
     setIsLoading(true);
 
     try {
+      // Split photos into URLs + annotations (parallel arrays saved to DB)
+      const photoUrls = photos
+        .map((p) => (typeof p === 'string' ? p : p?.url || p?.preview || null))
+        .filter(Boolean);
+      const photoAnnotations = photos.map((p) =>
+        typeof p === 'string' ? '' : p?.annotation || ''
+      );
+
       const productPayload = {
         event_id: eventId,
         supplier_id: actualSupplierId,
         created_by: user?.id,
         ...formData,
-        photos: photos.length > 0 ? photos : null,
+        photos: photoUrls.length > 0 ? photoUrls : null,
+        photo_annotations: photoAnnotations.length > 0 ? photoAnnotations : null,
       };
 
       if (productId) {
         productPayload.id = productId;
       }
 
-      const savedProduct = await saveWithSync(productPayload, productId);
+      const savedProduct = await saveProduct(productId || null, productPayload);
 
       toast.success(
         productId ? 'Produto atualizado com sucesso!' : 'Produto criado com sucesso!'
