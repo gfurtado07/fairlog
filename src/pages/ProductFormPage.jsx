@@ -174,13 +174,50 @@ export default function ProductFormPage() {
     setIsLoading(true);
 
     try {
-      // Split photos into URLs + annotations (parallel arrays saved to DB)
-      const photoUrls = photos
-        .map((p) => (typeof p === 'string' ? p : p?.url || p?.preview || null))
-        .filter(Boolean);
-      const photoAnnotations = photos.map((p) =>
-        typeof p === 'string' ? '' : p?.annotation || ''
-      );
+      // Upload new photos and build URLs
+      const photoUrls = [];
+      const photoAnnotations = [];
+
+      for (const photo of photos) {
+        const annotation = typeof photo === 'string' ? '' : photo?.annotation || '';
+
+        if (typeof photo === 'string') {
+          // Already a URL
+          photoUrls.push(photo);
+          photoAnnotations.push(annotation);
+        } else if (photo?.url) {
+          // Has existing URL
+          photoUrls.push(photo.url);
+          photoAnnotations.push(annotation);
+        } else if (photo?.file instanceof File) {
+          // New file — upload it
+          try {
+            const ext = photo.file.name?.split('.').pop() || 'jpg';
+            const fileName = `${eventId}/${Date.now()}_${Math.random()
+              .toString(36)
+              .slice(2)}.${ext}`;
+            const { error: uploadError } = await supabase.storage
+              .from('fairlog-photos')
+              .upload(fileName, photo.file);
+
+            if (uploadError) throw uploadError;
+
+            const { data: urlData } = supabase.storage
+              .from('fairlog-photos')
+              .getPublicUrl(fileName);
+
+            photoUrls.push(urlData.publicUrl);
+            photoAnnotations.push(annotation);
+          } catch (err) {
+            console.error('Photo upload error:', err);
+            toast.error('Erro ao fazer upload de foto');
+            throw err;
+          }
+        } else if (photo?.preview) {
+          // Blob preview without file — can't upload
+          console.warn('Photo has preview but no file, skipping:', photo);
+        }
+      }
 
       const productPayload = {
         event_id: eventId,

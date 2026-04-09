@@ -188,12 +188,12 @@ export default function SupplierFormPage() {
                 .toString(36)
                 .slice(2)}.${ext}`;
               const { error: uploadError } = await supabase.storage
-                .from('supplier_photos')
+                .from('fairlog-photos')
                 .upload(fileName, file);
               if (uploadError) throw uploadError;
 
               const { data: urlData } = supabase.storage
-                .from('supplier_photos')
+                .from('fairlog-photos')
                 .getPublicUrl(fileName);
 
               photoUrls.push(urlData.publicUrl);
