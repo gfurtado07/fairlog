@@ -58,15 +58,32 @@ const BusinessCardScanner = ({ onExtracted }) => {
       const compressed = await compressImage(file);
       const imageBase64 = await toBase64(compressed);
 
-      const { data, error } = await supabase.functions.invoke('scan-business-card', {
+      // Timeout after 30 seconds
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Timeout: scanner levou muito tempo')), 30000)
+      );
+
+      const invokePromise = supabase.functions.invoke('scan-business-card', {
         body: { imageBase64, mediaType: 'image/jpeg' },
       });
 
-      if (error) throw new Error(error.message || 'Erro ao chamar função');
+      const { data, error } = await Promise.race([invokePromise, timeoutPromise]);
+
+      console.log('Edge Function response:', { data, error });
+
+      if (error) {
+        const errorMsg = error.message || error.statusText || JSON.stringify(error);
+        if (errorMsg.includes('401') || errorMsg.includes('Unauthorized')) {
+          throw new Error('Chave API não configurada ou inválida. Verifique ANTHROPIC_API_KEY no Supabase.');
+        }
+        throw new Error(errorMsg);
+      }
+
       if (data?.error) throw new Error(data.error);
+      if (!data?.data) throw new Error('Resposta inválida da API');
 
       setStatus('success');
-      onExtracted?.(data?.data || {});
+      onExtracted?.(data.data);
 
       // Reset back to idle after 2 s
       setTimeout(() => setStatus('idle'), 2000);
@@ -74,7 +91,7 @@ const BusinessCardScanner = ({ onExtracted }) => {
       console.error('BusinessCardScanner error:', err);
       setErrorMsg(err.message || 'Erro ao ler cartão');
       setStatus('error');
-      setTimeout(() => setStatus('idle'), 3000);
+      setTimeout(() => setStatus('idle'), 5000);
     }
   };
 
